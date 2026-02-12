@@ -8,8 +8,10 @@
 	 
 	# Create an executable
 	add_executable(${PROJECT_NAME}
-      src/SessionManager.cpp
+      src/sessions/session_manager.cpp
 	    src/main.cpp
+	    src/commands/pomodoro/pomodoro.cpp
+      src/commands/registry.cpp
 	)
 	 
 	# Find our pre-installed DPP package (using FindDPP.cmake).
@@ -26,11 +28,14 @@
 	target_include_directories(${PROJECT_NAME} PRIVATE
 	    ${DPP_INCLUDE_DIR}
       ${CMAKE_CURRENT_SOURCE_DIR}/src
+      ${CMAKE_CURRENT_SOURCE_DIR}/src/sessions
+      ${CMAKE_CURRENT_SOURCE_DIR}/src/commands
+      ${CMAKE_CURRENT_SOURCE_DIR}/src/commands/pomodoro
 	)
 	 
 	# Set C++ version
 	set_target_properties(${PROJECT_NAME} PROPERTIES
-	    CXX_STANDARD 20
+	    CXX_STANDARD 23
 	    CXX_STANDARD_REQUIRED ON
 	)
 

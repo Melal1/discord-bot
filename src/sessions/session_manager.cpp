@@ -1,4 +1,4 @@
-#include "SessionManager.h"
+#include "session_manager.h"
 #include <dpp/cluster.h>
 #include <dpp/message.h>
 #include <dpp/misc-enum.h>
@@ -25,22 +25,12 @@ void SessionManager::Session::SchedulePhase(SessionManager &Manager)
     WorkSessionDone++;
     CurrentPhase = Phases::Break;
     bot.message_create(dpp::message(ChannelId, "Work Session Started" + std::to_string(WorkSessionDone)));
-    TimerId = bot.start_timer(
-        [&](dpp::timer t)
-        {
-          SchedulePhase(Manager);
-        },
-        BreakPeriod);
+    TimerId = bot.start_timer([&](dpp::timer t) { SchedulePhase(Manager); }, BreakPeriod);
     break;
   case Phases::Break:
     CurrentPhase = Phases::Work;
     bot.message_create(dpp::message(ChannelId, "Break Session started" + std::to_string(WorkSessionDone)));
-    TimerId = bot.start_timer(
-        [&](dpp::timer t)
-        {
-          SchedulePhase(Manager);
-        },
-        WorkPeriod);
+    TimerId = bot.start_timer([&](dpp::timer t) { SchedulePhase(Manager); }, WorkPeriod);
     break;
   }
 }
@@ -71,7 +61,6 @@ bool SessionManager::CancelTimer(snflake owner_id)
   Bot.message_create(dpp::message(it->second.ChannelId, "Timer ended"));
   Bot.stop_timer(it->second.TimerId);
   ActiveSessions.erase(it);
-
 
   return 1;
 }
