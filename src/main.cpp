@@ -2,6 +2,8 @@
 #include "registry.h"
 #include "session_manager.h"
 #include "utils.h"
+#include <dpp/appcommand.h>
+#include <vector>
 
 int main()
 {
@@ -32,7 +34,16 @@ int main()
       {
         if (dpp::run_once<struct register_bot_commands>())
         {
-          bot.global_command_create(dpp::slashcommand("pomodoro", "Starts a pomodoro session", bot.me.id));
+          std::vector<dpp::slashcommand> SlashCommands{{"pomodoro", "Manage pomodoro sessions", bot.me.id}};
+
+          SlashCommands[0].add_option(dpp::command_option(dpp::co_sub_command, "start", "Start the a session")
+                                          .add_option(dpp::command_option(dpp::co_integer, "work", "Work period in minutes", false))
+                                          .add_option(dpp::command_option(dpp::co_integer, "break", "Break period in minutes", false))
+                                          .add_option(dpp::command_option(dpp::co_integer, "repeat", "How many work sessions", false)));
+
+          SlashCommands[0].add_option(dpp::command_option(dpp::co_sub_command, "stop", "Stop the current working session"));
+
+          bot.global_command_create(SlashCommands[0]);
         }
       });
 

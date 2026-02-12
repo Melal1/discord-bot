@@ -17,16 +17,31 @@
 	# Find our pre-installed DPP package (using FindDPP.cmake).
 	find_package(DPP REQUIRED)
   find_package(fmt CONFIG REQUIRED)
+
+  # liboggz
+  find_path(OGGZ_INCLUDE_DIR NAMES oggz/oggz.h)
+
+  find_library(OGGZ_LIBRARIES
+    NAMES oggz liboggz
+  )
+
+include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args(OGGZ DEFAULT_MSG
+    OGGZ_LIBRARIES
+    OGGZ_INCLUDE_DIR
+)
 	 
 	# Link the pre-installed DPP package.
 	target_link_libraries(${PROJECT_NAME} 
 	    ${DPP_LIBRARIES}
       fmt::fmt
+      ${OGGZ_LIBRARIES}
 	)
 	 
 	# Include the DPP directories.
 	target_include_directories(${PROJECT_NAME} PRIVATE
 	    ${DPP_INCLUDE_DIR}
+      ${OGGZ_INCLUDE_DIR}
       ${CMAKE_CURRENT_SOURCE_DIR}/src
       ${CMAKE_CURRENT_SOURCE_DIR}/src/sessions
       ${CMAKE_CURRENT_SOURCE_DIR}/src/commands

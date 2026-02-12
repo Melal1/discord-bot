@@ -2,6 +2,7 @@
 #include <dpp/cluster.h>
 #include <dpp/message.h>
 #include <dpp/misc-enum.h>
+#include <fmt/format.h>
 #include <string>
 
 SessionManager::SessionManager(dpp::cluster &bot) : Bot(bot)
@@ -12,34 +13,48 @@ SessionManager::SessionManager(dpp::cluster &bot) : Bot(bot)
 void SessionManager::Session::SchedulePhase(SessionManager &Manager)
 {
   auto &bot = Manager.Bot;
-  if (WorkSessionDone >= Repeat)
+  if (CurrentSession >= Repeat)
   {
+    bot.message_create(dpp::message(ChannelId, "Pomodoro session finished!"));
     Manager.CancelTimer(OwnerId);
     return;
   }
-  bot.stop_timer(TimerId);
 
   switch (CurrentPhase)
   {
   case Phases::Work:
-    WorkSessionDone++;
-    CurrentPhase = Phases::Break;
-    bot.message_create(dpp::message(ChannelId, "Work Session Started" + std::to_string(WorkSessionDone)));
-    TimerId = bot.start_timer([&](dpp::timer t) { SchedulePhase(Manager); }, BreakPeriod);
+    CurrentPhase = Phases::Break; // Starting break session
+    bot.message_create(dpp::message(ChannelId, fmt::format("Break session {} started !", CurrentSession - 1)));
+    TimerId = bot.start_timer(
+        [&](dpp::timer t)
+        {
+          bot.stop_timer(t);
+          SchedulePhase(Manager);
+        },
+        BreakPeriod);
     break;
   case Phases::Break:
-    CurrentPhase = Phases::Work;
-    bot.message_create(dpp::message(ChannelId, "Break Session started" + std::to_string(WorkSessionDone)));
-    TimerId = bot.start_timer([&](dpp::timer t) { SchedulePhase(Manager); }, WorkPeriod);
+    CurrentPhase = Phases::Work; // Starting work session
+    bot.message_create(dpp::message(ChannelId, fmt::format("Work session {} started !", CurrentSession)));
+    TimerId = bot.start_timer(
+        [&](dpp::timer t)
+        {
+          bot.stop_timer(t);
+          CurrentSession++;
+          SchedulePhase(Manager);
+        },
+        WorkPeriod);
+
     break;
   }
 }
 
-SessionManager::Session::Session(dpp::cluster &bot, snflake usr_id, snflake channel_id, unsigned work_period, unsigned break_period, unsigned repeat) : OwnerId(usr_id), ChannelId(channel_id), WorkPeriod(work_period), BreakPeriod(break_period), Repeat(repeat)
+SessionManager::Session::Session(snflake usr_id, snflake channel_id, unsigned work_period, unsigned break_period, unsigned repeat)
+    : OwnerId(usr_id), ChannelId(channel_id), WorkPeriod(work_period), BreakPeriod(break_period), Repeat(repeat + 1)
 {
   StartTime = std::chrono::steady_clock::now();
-  WorkSessionDone = 0;
-  CurrentPhase = Phases::Work;
+  CurrentSession = 1;
+  CurrentPhase = Phases::Break;
 }
 
 bool SessionManager::StartTimer(snflake usr_id, snflake channel_id, unsigned work_period_in_sec, unsigned break_period_in_sec, unsigned repeat)
@@ -48,7 +63,7 @@ bool SessionManager::StartTimer(snflake usr_id, snflake channel_id, unsigned wor
   {
     return 0;
   }
-  auto res = ActiveSessions.emplace(usr_id, Session(Bot, usr_id, channel_id, work_period_in_sec, break_period_in_sec, repeat));
+  auto res = ActiveSessions.emplace(usr_id, Session(usr_id, channel_id, work_period_in_sec, break_period_in_sec, repeat));
   res.first->second.SchedulePhase(*this);
 
   return 1;
@@ -57,6 +72,8 @@ bool SessionManager::StartTimer(snflake usr_id, snflake channel_id, unsigned wor
 bool SessionManager::CancelTimer(snflake owner_id)
 {
   auto it = ActiveSessions.find(owner_id);
+  if (it == ActiveSessions.end())
+    return 0;
 
   Bot.message_create(dpp::message(it->second.ChannelId, "Timer ended"));
   Bot.stop_timer(it->second.TimerId);
