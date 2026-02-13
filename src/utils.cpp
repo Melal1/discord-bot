@@ -9,6 +9,18 @@ bool utl::GetBotToken(std::string &Buffer)
   return 1;
 }
 
+dpp::voicestate *utl::get_voice_state(dpp::guild *guild, dpp::snowflake user_id)
+{
+  auto it = guild->voice_members.find(user_id);
+  if (it == guild->voice_members.end())
+    return nullptr;
+
+  if (it->second.channel_id.empty())
+    return nullptr;
+
+  return &it->second;
+}
+
 dpp::voicestate *utl::get_voice_state(dpp::snowflake guild_id, dpp::snowflake user_id)
 {
   dpp::guild *g = dpp::find_guild(guild_id);

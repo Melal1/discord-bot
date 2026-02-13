@@ -1,7 +1,9 @@
 #include "pomodoro.h"
+#include "session_manager.h"
 #include "utils.h"
 #include <cctype>
 #include <dpp/appcommand.h>
+#include <dpp/cache.h>
 #include <dpp/message.h>
 #include <fmt/format.h>
 
@@ -24,16 +26,17 @@ void Pomodoro::Handler(dpp::slashcommand_t const &event)
 
   if (subcmd.name == "start")
   {
-    auto VC = utl::get_voice_state(guild_id, user_id);
+    dpp::guild *g = dpp::find_guild(guild_id);
+    auto VC = utl::get_voice_state(g, user_id);
     if (!VC)
     {
-      event.reply(msg("You have to be in a VC to start a sessiona", dpp::m_ephemeral));
+      event.reply(msg_fl("You have to be in a VC to start a sessiona", dpp::m_ephemeral));
       return;
     }
 
     if (ManagerRef.GetSession(user_id))
     {
-      event.reply(msg("There is an already running session under your name", dpp::m_ephemeral));
+      event.reply(msg_fl("There is an already running session under your name", dpp::m_ephemeral));
       return;
     }
 
@@ -64,20 +67,39 @@ void Pomodoro::Handler(dpp::slashcommand_t const &event)
       }
     }
 
-    if (!ManagerRef.StartTimer(user_id, VC->channel_id, Uwork, Ubreak, Urepeat))
+    if (!ManagerRef.StartTimer(
+            user_id,
+            VC->channel_id,
+            g,
+            Uwork,
+            Ubreak,
+            Urepeat,
+            [&event, &VC](SessionManager::Session const &s)
+            {
+              std::string msg(fmt::format("Okay starting a session in channel <#{}>\nMembers are: ", VC->channel_id));
+              for (auto const &id : s.MembersId)
+                msg += fmt::format("<@{}>", (long)id);
+
+              event.reply(msg);
+            } //
+            ))
     {
-      event.reply(msg("You can't start a session with an existing one under your name", dpp::m_ephemeral));
+      event.reply(msg_fl("You can't start a session with an existing one under your name", dpp::m_ephemeral));
       return;
     }
 
-    event.reply(fmt::format("Okay started a pomodoro session notification will be sent on the channel <#{}>", VC->channel_id));
     return;
   }
   if (subcmd.name == "stop")
   {
-    if (!ManagerRef.CancelTimer(user_id))
-    {
-      event.reply(msg("There is not an active session to stop", dpp::m_ephemeral));
+    if (!ManagerRef.CancelTimer(user_id,
+                                [&event,this](SessionManager::Session const &s)
+                                { // Called if session found and before it removed
+                                  if (event.command.channel_id != s.ChannelId)
+                                    ManagerRef.Bot.message_create(dpp::message(s.ChannelId,std::format("Session has been canceled by <@{}>", (long)s.OwnerId)));
+                                }))
+    { // if body
+      event.reply(msg_fl("There is not an active session to stop", dpp::m_ephemeral));
       return;
     }
     event.reply("Session canceled seccusfully");

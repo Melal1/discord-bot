@@ -6,7 +6,6 @@
 #include <dpp/message.h>
 #include <vector>
 
-
 int main()
 {
   std::string BotToken;
@@ -30,7 +29,7 @@ int main()
       [&](const dpp::slashcommand_t &event)
       {
         if (!Commands.Dispatch(event.command.get_command_name(), event))
-          event.reply(msg("UNKOWN COMMAND Please contact Melal",dpp::m_ephemeral));
+          event.reply(msg_fl("UNKOWN COMMAND Please contact Melal", dpp::m_ephemeral));
       });
 
   bot.on_ready(
@@ -40,14 +39,16 @@ int main()
         {
           std::vector<dpp::slashcommand> SlashCommands{{"pomodoro", "Manage pomodoro sessions", bot.me.id}};
 
-          SlashCommands[0].add_option(dpp::command_option(dpp::co_sub_command, "start", "Start the a session")
-                                          .add_option(dpp::command_option(dpp::co_integer, "work", "Work period in minutes", false))
-                                          .add_option(dpp::command_option(dpp::co_integer, "break", "Break period in minutes", false))
-                                          .add_option(dpp::command_option(dpp::co_integer, "repeat", "How many work sessions", false)));
+          SlashCommands[0].add_option(
+              dpp::command_option(dpp::co_sub_command, "start", "Start the a session")
+                  .add_option(dpp::command_option(dpp::co_integer, "work", "Work period in minutes", false))
+                  .add_option(dpp::command_option(dpp::co_integer, "break", "Break period in minutes", false))
+                  .add_option(dpp::command_option(dpp::co_integer, "repeat", "How many work sessions", false)));
 
-          SlashCommands[0].add_option(dpp::command_option(dpp::co_sub_command, "stop", "Stop the current working session"));
+          SlashCommands[0].add_option(
+              dpp::command_option(dpp::co_sub_command, "stop", "Stop the current working session"));
 
-          bot.global_command_create(SlashCommands[0]);
+          bot.global_bulk_command_create(SlashCommands);
         }
       });
 
