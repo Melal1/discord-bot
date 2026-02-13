@@ -11,12 +11,6 @@ class SessionManager
   using snflake = dpp::snowflake;
 
 public:
-  explicit SessionManager(dpp::cluster &bot);
-  bool StartTimer(snflake usr_id, snflake channel_id, unsigned work_period_in_min, unsigned break_period_in_min, unsigned repeat);
-  bool CancelTimer(snflake OwnerId);
-  dpp::cluster &Bot;
-
-private:
   struct Session
   {
     enum class Phases
@@ -39,6 +33,14 @@ private:
     void SchedulePhase(SessionManager &Manager);
   };
 
+  explicit SessionManager(dpp::cluster &bot);
+  Session *GetSession(snflake owner_id);
+  Session const *GetSession(snflake owner_id) const;
+  bool StartTimer(snflake usr_id, snflake channel_id, unsigned work_period_in_min, unsigned break_period_in_min, unsigned repeat);
+  bool CancelTimer(snflake owner_id, std::function<void(SessionManager::Session const &session)> call_before_remove = nullptr);
+  dpp::cluster &Bot;
+
+private:
   std::unordered_map<snflake, Session> ActiveSessions;
 };
 #endif

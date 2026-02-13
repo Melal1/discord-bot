@@ -2,7 +2,9 @@
 #include "utils.h"
 #include <cctype>
 #include <dpp/appcommand.h>
+#include <dpp/message.h>
 #include <fmt/format.h>
+
 constexpr unsigned DefaultWorkPeriod = 10;
 constexpr unsigned DefaultBreakPeriod = 10;
 constexpr unsigned DefaultRepeat = 3;
@@ -22,19 +24,19 @@ void Pomodoro::Handler(dpp::slashcommand_t const &event)
 
   if (subcmd.name == "start")
   {
-    dpp::guild *g = dpp::find_guild(guild_id);
-    if (!g)
+    auto VC = utl::get_voice_state(guild_id, user_id);
+    if (!VC)
     {
-      event.reply("Couldn't find the guild try again later");
+      event.reply(msg("You have to be in a VC to start a sessiona", dpp::m_ephemeral));
       return;
     }
 
-    auto it = g->voice_members.find(user_id);
-    if (it == g->voice_members.end() || it->second.channel_id.empty())
+    if (ManagerRef.GetSession(user_id))
     {
-      event.reply("To start a session you need to be in a voice channel first!");
+      event.reply(msg("There is an already running session under your name", dpp::m_ephemeral));
       return;
     }
+
     unsigned Uwork = DefaultWorkPeriod;
     unsigned Ubreak = DefaultBreakPeriod;
     unsigned Urepeat = DefaultRepeat;
@@ -42,39 +44,43 @@ void Pomodoro::Handler(dpp::slashcommand_t const &event)
     {
       for (auto &it : subcmd.options)
       {
+        long Value = std::get<long>(it.value);
+        if (Value <= 0)
+          continue;
         switch (tolower(it.name[0]))
         {
         case 'w':
-          Uwork = std::get<long>(it.value);
+          Uwork = Value;
           break;
         case 'b':
-          Ubreak = std::get<long>(it.value);
+          Ubreak = Value;
           break;
         case 'r':
-          Urepeat = std::get<long>(it.value);
+          Urepeat = Value;
           break;
-          default:
-          ManagerRef.Bot.log(DL::ll_error,fmt::format("Option {} not recognized assigned to default",it.name));
+        default:
+          ManagerRef.Bot.log(DL::ll_error, fmt::format("Option {} not recognized assigning to default", it.name));
         }
       }
     }
 
-    if (!ManagerRef.StartTimer(user_id, it->second.channel_id, Uwork, Ubreak, Urepeat))
+    if (!ManagerRef.StartTimer(user_id, VC->channel_id, Uwork, Ubreak, Urepeat))
     {
-      event.reply("You can't start a session with an existing one under your name");
+      event.reply(msg("You can't start a session with an existing one under your name", dpp::m_ephemeral));
       return;
     }
 
-    event.reply(fmt::format("Okay started a pomodoro session notification will be sent on the channel <#{}>", it->second.channel_id));
+    event.reply(fmt::format("Okay started a pomodoro session notification will be sent on the channel <#{}>", VC->channel_id));
     return;
   }
   if (subcmd.name == "stop")
   {
     if (!ManagerRef.CancelTimer(user_id))
     {
-      event.reply("There is not an active session to stop");
+      event.reply(msg("There is not an active session to stop", dpp::m_ephemeral));
       return;
     }
     event.reply("Session canceled seccusfully");
+    return;
   }
 }

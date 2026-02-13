@@ -12,6 +12,7 @@
 	    src/main.cpp
 	    src/commands/pomodoro/pomodoro.cpp
       src/commands/registry.cpp
+      src/utils.cpp
 	)
 	 
 	# Find our pre-installed DPP package (using FindDPP.cmake).

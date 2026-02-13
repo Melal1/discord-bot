@@ -1,19 +1,17 @@
 #ifndef UTILS_H
 #define UTILS_H
 #include <dpp/dpp.h>
-#include <string>
+#include <dpp/voicestate.h>
 #include <fmt/core.h>
+#include <string>
+#define msg(content, flags) dpp::message(content).set_flags(flags)
 
 using DL = dpp::loglevel;
 
-inline bool GetBotToken(std::string &Buffer)
+namespace utl
 {
-  const char *res = getenv("DisBotTok");
-  if (!res)
-    return 0;
-  Buffer = res;
-  return 1;
-}
+bool GetBotToken(std::string &Buffer);
+dpp::voicestate *get_voice_state(dpp::snowflake guild_id, dpp::snowflake user_id);
 
 constexpr const char *SeverityName(dpp::loglevel lvl)
 {
@@ -36,7 +34,6 @@ constexpr const char *SeverityName(dpp::loglevel lvl)
   }
 }
 
-
+} // namespace utl
 
 #endif
-
