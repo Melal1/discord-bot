@@ -43,10 +43,12 @@ int main()
               dpp::command_option(dpp::co_sub_command, "start", "Start the a session")
                   .add_option(dpp::command_option(dpp::co_integer, "work", "Work period in minutes", false))
                   .add_option(dpp::command_option(dpp::co_integer, "break", "Break period in minutes", false))
-                  .add_option(dpp::command_option(dpp::co_integer, "repeat", "How many work sessions", false)));
+                  .add_option(dpp::command_option(dpp::co_integer, "repeat", "How many work sessions", false))
+                  .add_option(dpp::command_option(dpp::co_boolean, "mute", "If you want the bot to mute members during work sessions", false)));
 
           SlashCommands[0].add_option(
               dpp::command_option(dpp::co_sub_command, "stop", "Stop the current working session"));
+          SlashCommands[0].add_option(dpp::command_option(dpp::co_sub_command, "time", "Show remaining time"));
 
           bot.global_bulk_command_create(SlashCommands);
         }

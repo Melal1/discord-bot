@@ -7,8 +7,6 @@ class Pomodoro
 public:
   Pomodoro(SessionManager &manager);
   void Handler(dpp::slashcommand_t const &event);
-
-private:
   SessionManager &ManagerRef;
 };
 #endif
