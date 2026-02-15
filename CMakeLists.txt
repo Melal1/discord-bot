@@ -13,6 +13,7 @@
 	    src/commands/pomodoro/pomodoro.cpp
       src/commands/registry.cpp
       src/utils.cpp
+      src/voice.cpp
 	)
 	 
 	# Find our pre-installed DPP package (using FindDPP.cmake).
@@ -26,6 +27,10 @@
     NAMES oggz liboggz
   )
 
+  find_path(OPUSFILE_INCLUDE_DIR opusfile.h)
+find_library(OPUSFILE_LIBRARY NAMES opusfile)
+
+
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(OGGZ DEFAULT_MSG
     OGGZ_LIBRARIES
@@ -37,12 +42,14 @@ find_package_handle_standard_args(OGGZ DEFAULT_MSG
 	    ${DPP_LIBRARIES}
       fmt::fmt
       ${OGGZ_LIBRARIES}
+      ${OPUSFILE_LIBRARY}
 	)
 	 
 	# Include the DPP directories.
 	target_include_directories(${PROJECT_NAME} PRIVATE
 	    ${DPP_INCLUDE_DIR}
       ${OGGZ_INCLUDE_DIR}
+      ${OPUSFILE_INCLUDE_DIR}
       ${CMAKE_CURRENT_SOURCE_DIR}/src
       ${CMAKE_CURRENT_SOURCE_DIR}/src/sessions
       ${CMAKE_CURRENT_SOURCE_DIR}/src/commands

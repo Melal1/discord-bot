@@ -41,10 +41,22 @@ int main()
 
           SlashCommands[0].add_option(
               dpp::command_option(dpp::co_sub_command, "start", "Start the a session")
-                  .add_option(dpp::command_option(dpp::co_integer, "work", "Work period in minutes", false))
-                  .add_option(dpp::command_option(dpp::co_integer, "break", "Break period in minutes", false))
-                  .add_option(dpp::command_option(dpp::co_integer, "repeat", "How many work sessions", false))
-                  .add_option(dpp::command_option(dpp::co_boolean, "mute", "If you want the bot to mute members during work sessions", false)));
+                  .add_option(
+                      dpp::command_option(dpp::co_integer, "work", "Work period in minutes, defaults to 40", false))
+                  .add_option(
+                      dpp::command_option(dpp::co_integer, "break", "Break period in minutes, defaults to 15", false))
+                  .add_option(
+                      dpp::command_option(dpp::co_integer, "repeat", "How many work sessions, defaults to 3", false))
+                  .add_option(dpp::command_option(
+                      dpp::co_boolean,
+                      "mute",
+                      "If you want the bot to mute members during work sessions, defaults to off",
+                      false))
+                  .add_option(dpp::command_option(
+                      dpp::co_boolean,
+                      "voice",
+                      "If you want the bot to join and notify when a work/break session ends, defaults to off",
+                      false)));
 
           SlashCommands[0].add_option(
               dpp::command_option(dpp::co_sub_command, "stop", "Stop the current working session"));

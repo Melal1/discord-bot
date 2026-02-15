@@ -1,4 +1,5 @@
 #include "pomodoro.h"
+
 #include "session_manager.h"
 #include "utils.h"
 #include <dpp/appcommand.h>
@@ -68,7 +69,10 @@ HandlePomodoroStart(Pomodoro &self, const dpp::slashcommand_t &event, dpp::comma
       case 'm':
         if (std::get<bool>(it.value))
           flags |= (uint8_t)SessionManager::Session::Flag::Mute;
-
+        break;
+      case 'v':
+        if (std::get<bool>(it.value))
+          flags |= (uint8_t)SessionManager::Session::Flag::Voice;
         break;
       default:
         self.ManagerRef.Bot.log(DL::ll_error, fmt::format("Option {} not recognized assigning to default", it.name));

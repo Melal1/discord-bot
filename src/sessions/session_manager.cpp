@@ -1,5 +1,6 @@
 #include "session_manager.h"
 #include "utils.h"
+#include "voice.h"
 #include <chrono>
 #include <dpp/cluster.h>
 #include <dpp/guild.h>
@@ -16,10 +17,10 @@ using SMS = SessionManager::Session;
 void ChangeMembersStatus(SessionManager &mgr, SessionManager::Session *session, bool mute)
 {
   dpp::guild_member GuildMember;
+  GuildMember.guild_id = session->GuildId;
   GuildMember.set_mute(mute);
   for (auto const &id : session->MembersId)
   {
-    GuildMember.guild_id = session->GuildId;
     GuildMember.user_id = id;
     mgr.Bot.guild_edit_member(GuildMember);
   }
@@ -136,12 +137,16 @@ void SMS::SchedulePhase(SessionManager &manager)
   case 0: // Starting work session
     if (mFlagCmp(Flags, Mute))
       ChangeMembersStatus(manager, this, 1);
+    if (CurrentSessionNo > 1 && mFlagCmp(Flags, Voice))
+      PlayAudio(Bot, GuildId, ChannelId, BreakToWorkAudio.path, BreakToWorkAudio.duration);
     ScheduleNext(WorkPeriod);
     CurrentSessionNo++;
     break;
   case 1: // Starting break session
     if (mFlagCmp(Flags, Mute))
       ChangeMembersStatus(manager, this, 0);
+    if (mFlagCmp(Flags, Voice))
+      PlayAudio(Bot, GuildId, ChannelId, WorkToBreakAudio.path, WorkToBreakAudio.duration);
     ScheduleNext(BreakPeriod);
     break;
   }

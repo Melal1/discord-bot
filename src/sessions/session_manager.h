@@ -8,6 +8,17 @@
 #include <unordered_map>
 #include <vector>
 
+struct Audio
+{
+  const char *path;
+  const uint32_t &&duration;
+};
+
+constexpr const Audio BreakToWorkAudio{"assests/audio/BreakToWork.opus", 6};
+constexpr const Audio WorkToBreakAudio{"assests/audio/WorkToBreak.opus", 4};
+
+// constexpr const Audio QadTasama { };
+
 class SessionManager
 {
   using snflake = dpp::snowflake;
@@ -19,6 +30,7 @@ public:
     {
       Break = 1u << 0, // So if bit-0 was 1 in the flags then it's a break session
       Mute = 1u << 1,  // So if the bit-1 was 1 in the flags then mute is on ( 0-off )
+      Voice = 1u << 2
     };
     // 8-byte / pointer-sized first
     snflake OwnerId;
