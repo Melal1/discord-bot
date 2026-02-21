@@ -10,3 +10,5 @@ public:
   SessionManager &ManagerRef;
 };
 #endif
+
+void AddPomodoroSlashCommand(std::vector<dpp::slashcommand> &SlashCommands, dpp::snowflake BotId);

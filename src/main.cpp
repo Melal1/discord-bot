@@ -4,6 +4,7 @@
 #include "utils.h"
 #include <dpp/appcommand.h>
 #include <dpp/message.h>
+#include <dpp/misc-enum.h>
 #include <vector>
 
 int main()
@@ -15,8 +16,13 @@ int main()
     return 1;
   }
   dpp::cluster bot(BotToken, dpp::i_default_intents | dpp::i_message_content);
-  bot.on_log([](const dpp::log_t &e)
-             { fmt::print(stderr, "[{}\x1b[0m] {}\n", utl::SeverityName(e.severity), e.message); });
+
+  bot.on_log(
+      [](dpp::log_t const &e)
+      {
+        if (e.severity >= dpp::loglevel::ll_info)
+          fmt::print(stderr, "[{}\x1b[0m] {}\n", utl::SeverityName(e.severity), e.message);
+      });
 
   SessionManager mgr(bot);
 
@@ -37,30 +43,9 @@ int main()
       {
         if (dpp::run_once<struct register_bot_commands>())
         {
-          std::vector<dpp::slashcommand> SlashCommands{{"pomodoro", "Manage pomodoro sessions", bot.me.id}};
-
-          SlashCommands[0].add_option(
-              dpp::command_option(dpp::co_sub_command, "start", "Start the a session")
-                  .add_option(
-                      dpp::command_option(dpp::co_integer, "work", "Work period in minutes, defaults to 40", false))
-                  .add_option(
-                      dpp::command_option(dpp::co_integer, "break", "Break period in minutes, defaults to 15", false))
-                  .add_option(
-                      dpp::command_option(dpp::co_integer, "repeat", "How many work sessions, defaults to 3", false))
-                  .add_option(dpp::command_option(
-                      dpp::co_boolean,
-                      "mute",
-                      "If you want the bot to mute members during work sessions, defaults to off",
-                      false))
-                  .add_option(dpp::command_option(
-                      dpp::co_boolean,
-                      "voice",
-                      "If you want the bot to join and notify when a work/break session ends, defaults to off",
-                      false)));
-
-          SlashCommands[0].add_option(
-              dpp::command_option(dpp::co_sub_command, "stop", "Stop the current working session"));
-          SlashCommands[0].add_option(dpp::command_option(dpp::co_sub_command, "time", "Show remaining time"));
+          std::vector<dpp::slashcommand> SlashCommands;
+          SlashCommands.reserve(1);
+          AddPomodoroSlashCommand(SlashCommands, bot.me.id);
 
           bot.global_bulk_command_create(SlashCommands);
         }

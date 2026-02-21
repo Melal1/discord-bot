@@ -7,7 +7,7 @@
 #include <fmt/core.h>
 #include <string>
 #define msg_fl(content, flags) dpp::message(content).set_flags(flags)
-#define mFlagCmp(flags, flag_to_cmp) (flags &(uint8_t)SessionManager::Session::Flag::flag_to_cmp)
+#define mFlagCmp(flags, flag_to_cmp) (flags &(flag_t)SessionManager::Session::Flag::flag_to_cmp)
 
 using DL = dpp::loglevel;
 
@@ -38,9 +38,9 @@ constexpr const char *SeverityName(dpp::loglevel lvl)
   }
 }
 
-inline bool FlagCmp(uint8_t flags, SessionManager::Session::Flag flag_to_cmp)
+inline bool FlagCmp(flag_t flags, SessionManager::Session::Flag flag_to_cmp)
 {
-  return (flags & (uint8_t)flag_to_cmp);
+  return (flags & (flag_t)flag_to_cmp);
 }
 
 } // namespace utl
