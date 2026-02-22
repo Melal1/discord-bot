@@ -10,18 +10,59 @@
 #include <dpp/message.h>
 #include <dpp/snowflake.h>
 #include <fmt/format.h>
+#include <optional>
 
 constexpr unsigned DefaultWorkPeriod = 40;
 constexpr unsigned DefaultBreakPeriod = 15;
 constexpr unsigned DefaultRepeat = 3;
 
-Pomodoro::Pomodoro(SessionManager &Manager) : ManagerRef(Manager)
+// constructor-------
+
+Pomodoro::Pomodoro(SessionManager &Manager) noexcept : ManagerRef(Manager)
 {
   ManagerRef.Bot.log(DL::ll_info, "Pomodoro init");
 }
 
+// ------------------
+
+// Helper functions--
+
+/*
+   @brief Get a value from a command_data_option variant.
+   @param bot if provided then the function will use the bot to log errors.
+   @param event if provided then the function will reply to the event when error happend.
+   @return returns the value if it's there and nullopt if not.
+ */
+template <class T>
+[[nodiscard]]
+static inline std::optional<T> GetValueSafe(
+    dpp::command_data_option const &option,
+    dpp::cluster *bot = nullptr,
+    dpp::slashcommand_t const *event = nullptr) noexcept
+{
+  static_assert(
+      std::disjunction_v<
+          std::is_same<T, std::string>,
+          std::is_same<T, int64_t>,
+          std::is_same<T, bool>,
+          std::is_same<T, dpp::snowflake>,
+          std::is_same<T, double>>,
+      "T must be a valid command_value type");
+
+  if (const T *v = std::get_if<T>(&option.value))
+    return *v;
+
+  if (event)
+    event->reply("Bot error happened; please contact Melal");
+
+  if (bot)
+    bot->log(DL::ll_error, fmt::format("Error when trying to get value from option {}", option.name));
+
+  return std::nullopt;
+}
+
 template <bool owner_search, bool member_search> // IsInActiveSession
-static inline SessionManager::Session *IsInActiveSession(Pomodoro &self, dpp::snowflake usr_id)
+static inline SessionManager::Session *IsInActiveSession(Pomodoro &self, dpp::snowflake usr_id) noexcept
 {
   static_assert(owner_search || member_search, "You can't set both to false");
   SessionManager::Session *res = nullptr;
@@ -67,34 +108,72 @@ HandlePomodoroStart(Pomodoro &self, const dpp::slashcommand_t &event, dpp::comma
     return;
   }
 
-  unsigned Uwork = DefaultWorkPeriod;
-  unsigned Ubreak = DefaultBreakPeriod;
-  unsigned Urepeat = DefaultRepeat;
+  uint32_t Uwork = DefaultWorkPeriod;
+  uint32_t Ubreak = DefaultBreakPeriod;
+  uint32_t Urepeat = DefaultRepeat;
   flag_t flags = 0;
+
+  auto get_period = [&self, &event](uint32_t &var, dpp::command_data_option const &option) noexcept -> bool
+  {
+    if (auto v = GetValueSafe<int64_t>(option, &self.ManagerRef.Bot, &event))
+    {
+      if (*v <= 0)
+      {
+        event.reply(msg_fl(fmt::format("Not valid period {}", *v), dpp::m_ephemeral));
+        return 0;
+      }
+      if (*v > 4 * 3600)
+      {
+        event.reply(msg_fl("Max period is 4 hours for work/break", dpp::m_ephemeral));
+        return 0;
+      }
+      var = *v;
+      return 1;
+    }
+    else
+      return 0;
+  };
+  using Flag = SessionManager::Session::Flag;
+
+  auto get_flag = [&self, &event](flag_t &var, Flag flag, dpp::command_data_option const &option) noexcept -> bool
+  {
+    if (auto v = GetValueSafe<bool>(option, &self.ManagerRef.Bot, &event))
+    {
+      SessionManager::SetFlag(var, flag, *v);
+      return 1;
+    }
+    else
+      return 0;
+  };
+
   if (!subcmd.empty())
   {
     for (auto &it : subcmd.options)
     {
-      using Flag = SessionManager::Session::Flag;
       switch (tolower(it.name[0]))
       {
       case 'w':
-        Uwork = std::get<long>(it.value);
+        if (!get_period(Uwork, it))
+          return;
         break;
       case 'b':
-        Ubreak = std::get<long>(it.value);
+        if (!get_period(Ubreak, it))
+          return;
         break;
       case 'r':
-        Urepeat = std::get<long>(it.value);
+        if (!get_period(Urepeat, it))
+          return;
         break;
       case 'm':
-        SessionManager::SetFlag(flags, Flag::Mute, std::get<bool>(it.value));
+        if (!get_flag(flags, Flag::Mute, it))
+          return;
         break;
       case 'v':
-        SessionManager::SetFlag(flags, Flag::Voice, std::get<bool>(it.value));
+        if (!get_flag(flags, Flag::Voice, it))
+          return;
         break;
       default:
-        self.ManagerRef.Bot.log(DL::ll_error, fmt::format("Option {} not recognized assigning to default", it.name));
+        self.ManagerRef.Bot.log(DL::ll_error, fmt::format("Option {} not recognized", it.name));
       }
     }
   }
@@ -113,7 +192,7 @@ HandlePomodoroStart(Pomodoro &self, const dpp::slashcommand_t &event, dpp::comma
         msg.append(fmt::format("Okay starting a session in channel <#{}>\nMembers are: ", Channel->id));
         for (auto const &id : s.MembersId)
         {
-          msg.append(fmt::format("<@{}>  ", (long)id));
+          msg.append(fmt::format("<@{}>  ", (int64_t)id));
         }
 
         if (event.command.channel_id == Channel->id)
@@ -126,7 +205,9 @@ HandlePomodoroStart(Pomodoro &self, const dpp::slashcommand_t &event, dpp::comma
   return;
 }
 
-void Pomodoro::Handler(dpp::slashcommand_t const &event)
+// ------------------
+
+void Pomodoro::Handler(dpp::slashcommand_t const &event) noexcept
 {
   dpp::command_interaction cmd_data = event.command.get_command_interaction();
   auto subcmd = cmd_data.options[0];
@@ -169,11 +250,11 @@ void Pomodoro::Handler(dpp::slashcommand_t const &event)
     long RemainingTime = Session->GetRemainingTime();
     bool IsMinute = RemainingTime > 60;
     std::string msg = fmt::format(
-        "Remaining time for **{}** '{}' is `{}{}`",
+        "Remaining time for **{}** '{}' is `{}` {}",
         Session->Flags & 1u ? "Break" : "Work",
         Session->CurrentSessionNumber - 1,
         IsMinute ? RemainingTime / 60 : RemainingTime, // If RemainingTime is more than minute display it in minutes
-        IsMinute ? 'm' : 's'                           // Unit
+        IsMinute ? "minutes" : "seconds"               // Unit
     );
 
     if (event.command.channel_id == Session->ChannelId)
@@ -197,7 +278,16 @@ void Pomodoro::Handler(dpp::slashcommand_t const &event)
     for (auto &option : subcmd.options)
     {
       using Flag = SessionManager::Session::Flag;
-      bool mode = std::get<bool>(option.value);
+      bool mode;
+      if (auto v = GetValueSafe<bool>(option))
+        mode = *v;
+      else
+      {
+        event.reply("Error happend please contact melal");
+        ManagerRef.Bot.log(DL::ll_error, fmt::format("While obtaining value {}", option.name));
+        return;
+      }
+
       switch (tolower(option.name[0]))
       {
       case 'm': // mute
@@ -219,7 +309,7 @@ void Pomodoro::Handler(dpp::slashcommand_t const &event)
   }
 }
 
-void AddPomodoroSlashCommand(std::vector<dpp::slashcommand> &SlashCommands, dpp::snowflake BotId)
+void AddPomodoroSlashCommand(std::vector<dpp::slashcommand> &SlashCommands, dpp::snowflake BotId) noexcept
 {
   dpp::slashcommand Pomodoro("pomodoro", "Manage pomodoro sessions", BotId);
 

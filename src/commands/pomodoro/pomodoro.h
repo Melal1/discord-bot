@@ -5,10 +5,10 @@
 class Pomodoro
 {
 public:
-  Pomodoro(SessionManager &manager);
-  void Handler(dpp::slashcommand_t const &event);
+  Pomodoro(SessionManager &manager) noexcept;
+  void Handler(dpp::slashcommand_t const &event) noexcept;
   SessionManager &ManagerRef;
 };
 #endif
 
-void AddPomodoroSlashCommand(std::vector<dpp::slashcommand> &SlashCommands, dpp::snowflake BotId);
+void AddPomodoroSlashCommand(std::vector<dpp::slashcommand> &SlashCommands, dpp::snowflake BotId) noexcept;
