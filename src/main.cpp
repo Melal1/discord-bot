@@ -1,5 +1,4 @@
-#include "pomodoro.h"
-#include "registry.h"
+#include "loadcommands.h"
 #include "session_manager.h"
 #include "utils.h"
 #include <dpp/appcommand.h>
@@ -15,21 +14,19 @@ int main()
     fmt::print(stderr, "No Bot Token found in env var DisBotTok");
     return 1;
   }
-  dpp::cluster bot(BotToken, dpp::i_default_intents | dpp::i_message_content);
+  dpp::cluster bot(BotToken, dpp::i_default_intents | dpp::i_message_content | dpp::i_guild_voice_states);
 
   bot.on_log(
       [](dpp::log_t const &e)
       {
-        if (e.severity >= dpp::loglevel::ll_info)
+        if (e.severity >= dpp::loglevel::ll_debug)
           fmt::print(stderr, "[{}\x1b[0m] {}\n", utl::SeverityName(e.severity), e.message);
       });
 
   SessionManager mgr(bot);
-
   Pomodoro PomHandler(mgr);
   Registry Commands(bot);
-
-  Commands.Add("pomodoro", [&PomHandler](dpp::slashcommand_t const &e) { PomHandler.Handler(e); });
+  LoadAllCommands(Commands, PomHandler);
 
   bot.on_slashcommand(
       [&](const dpp::slashcommand_t &event)
@@ -37,6 +34,8 @@ int main()
         if (!Commands.Dispatch(event.command.get_command_name(), event))
           event.reply(msg_fl("UNKOWN COMMAND Please contact Melal", dpp::m_ephemeral));
       });
+
+  bot.on_voice_state_update([&bot, &PomHandler](dpp::voice_state_update_t const &e) { PomHandler.VCHandler(e); });
 
   bot.on_ready(
       [&bot](const dpp::ready_t &event)

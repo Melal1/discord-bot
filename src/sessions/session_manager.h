@@ -1,6 +1,7 @@
 #ifndef SESSION_MANAGER_H
 #define SESSION_MANAGER_H
 #include <chrono>
+#include <cstddef>
 #include <dpp/channel.h>
 #include <dpp/cluster.h>
 #include <dpp/snowflake.h>
@@ -61,19 +62,20 @@ public:
         std::string_view vc_channel_name,
         flag_t flags = 1u << 0 //
     );
-    void SchedulePhase(SessionManager &manager);
-    long GetRemainingTime();
+    void SchedulePhase(SessionManager &manager) noexcept;
+    long GetRemainingTime() noexcept;
 
-    void ChangeMembersStatus(SessionManager &manager, bool mute);
+    void ChangeMembersStatus(SessionManager &manager, bool mute) noexcept;
   };
 
-  explicit SessionManager(dpp::cluster &bot);
-  Session *GetSessionByOwnerId(snflake owner_id);
-  Session const *GetSessionByOwnerId(snflake owner_id) const;
+  explicit SessionManager(dpp::cluster &bot) noexcept;
+
+  Session *GetSessionByOwnerId(snflake owner_id) noexcept;
+  Session const *GetSessionByOwnerId(snflake owner_id) const noexcept;
   Session *GetSessionByUserId(snflake usr_id);
 
-  Session const *GetSessionByUserId(snflake usr_id) const;
-  void StartTimer(
+  Session const *GetSessionByUserId(snflake usr_id) const noexcept;
+  void StartSession(
       snflake usr_id,
       dpp::channel *channel,
       unsigned work_period_in_min,
@@ -81,11 +83,57 @@ public:
       unsigned repeat,
       flag_t flags = 1u << 0,
       std::function<void(Session const &session)> call_back = nullptr);
-  bool CancelTimer(
-      snflake owner_id, std::function<void(SessionManager::Session const &session)> call_before_remove = nullptr);
-  void CancelTimer(
-      Session *session, std::function<void(SessionManager::Session const &session)> call_before_remove = nullptr);
+  /*
+     @brief Cancel the session associated with the given owner_id and remove it from the active sessions
+     @param owner_id the snowflake id of the session owner.
+     @param call_before_remove optional callback function that will be called before session is removed
+     from the active sessions, it must take a single parameter of type Session const& , any return value is ignored so
+     return void.
+     @return true if the session was found and canceled successfully, false if no session with the given owner_id was
+     found.
+  */
+  template <class F = std::nullptr_t> //
+  bool CancelSession(snflake owner_id, F &&call_before_remove = nullptr) noexcept;
+  /*
+     @brief Cancel the session associated with the given session pointer.
+     @param session pointer to the session to be canceled.
+     @param call_before_remove optional callback function that will be called before session is removed
+     from the active sessions, it must take a single parameter of type Session const& , any return value is ignored so
+     return void.
+
+     @param erase if set to true, the session will be removed from the active sessions after calling the callback
+     function; if set to false, the session will not be remove ,please use this with caution as it can lead to memory
+     leaks if the session is not removed later or double erase if erase == 1 and the caller also erases the session
+     after calling this function.
+  */
+  template <class F = std::nullptr_t> //
+  void CancelSession(Session *session, F &&call_before_remove = nullptr, bool erase = 1) noexcept;
+
   dpp::cluster &Bot;
+
+  /*
+     @brief return the number of active sessions
+     @return uint32_t that represent the number of active sessions
+  */
+  uint32_t GetActiveSessions() noexcept
+  {
+    return _active_sessions.size();
+  }
+
+  /*
+     @brief Changes the owner_id for the session and the hash map key
+     @param owner_id the current owner_id of the session
+     @param new_owner_id the new owner_id to be set for the session
+     @return true if the owner_id was changed successfully, false if the session was not found
+   */
+  bool ChangeOwnerId(dpp::snowflake owner_id, dpp::snowflake new_owner_id) noexcept;
+
+  /*
+     @brief Changes the owner_id for the session and the hash map key
+     @param session pointer to the session to change its owner_id
+     @param new_owner_id the new owner_id to be set for the session
+  */
+  void ChangeOwnerId(Session *session, dpp::snowflake new_owner_id) noexcept;
 
   // Static methods
 
@@ -105,4 +153,35 @@ public:
 private:
   std::unordered_map<snflake, Session> _active_sessions;
 };
+
+template <class F> //
+bool SessionManager::CancelSession(snflake owner_id, F &&call_before_remove) noexcept
+{
+  auto it = _active_sessions.find(owner_id);
+  if (it == _active_sessions.end())
+    return 0;
+
+  CancelSession(&it->second, call_before_remove, 0);
+
+  _active_sessions.erase(it);
+
+  return 1;
+}
+
+template <class F> //
+void SessionManager::CancelSession(SessionManager::Session *session, F &&call_before_remove, bool erase) noexcept
+{
+  Bot.stop_timer(session->TimerId);
+  if (HasFlag(session->Flags, Session::Flag::Mute))
+    session->ChangeMembersStatus(*this, 0);
+  // Bot.channel_edit(dpp::find_channel(it->second.ChannelId)->set_name(it->second.VoiceChannelName));
+  if constexpr (!std::is_same_v<std::decay_t<F>, std::nullptr_t>)
+  {
+    std::forward<F>(call_before_remove)(*session);
+  }
+
+  if (erase)
+    _active_sessions.erase(session->OwnerId);
+}
+
 #endif

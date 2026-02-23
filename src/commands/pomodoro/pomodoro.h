@@ -6,7 +6,8 @@ class Pomodoro
 {
 public:
   Pomodoro(SessionManager &manager) noexcept;
-  void Handler(dpp::slashcommand_t const &event) noexcept;
+  void SlashCommandHandler(dpp::slashcommand_t const &event) noexcept;
+  void VCHandler(dpp::voice_state_update_t const &event) noexcept;
   SessionManager &ManagerRef;
 };
 #endif

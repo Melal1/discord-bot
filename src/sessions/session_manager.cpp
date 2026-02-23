@@ -8,7 +8,9 @@
 #include <dpp/guild.h>
 #include <dpp/message.h>
 #include <dpp/misc-enum.h>
+#include <dpp/snowflake.h>
 #include <dpp/timer.h>
+#include <dpp/voicestate.h>
 #include <fmt/format.h>
 #include <functional>
 #include <string>
@@ -17,7 +19,7 @@ using SMS = SessionManager::Session;
 constexpr const uint32_t sec_in_min = 2;
 
 // Constructors
-SessionManager::SessionManager(dpp::cluster &bot) : Bot(bot)
+SessionManager::SessionManager(dpp::cluster &bot) noexcept : Bot(bot)
 {
   Bot.log(dpp::loglevel::ll_info, "Session manager init");
 }
@@ -47,13 +49,13 @@ SMS::Session(
 // Getters
 
 //// Session Manager
-SMS *SessionManager::GetSessionByOwnerId(snflake owner_id)
+SMS *SessionManager::GetSessionByOwnerId(snflake owner_id) noexcept
 {
   auto it = _active_sessions.find(owner_id);
   return it == _active_sessions.end() ? nullptr : &it->second;
 }
 
-SMS const *SessionManager::GetSessionByOwnerId(snflake owner_id) const
+SMS const *SessionManager::GetSessionByOwnerId(snflake owner_id) const noexcept
 {
   auto it = _active_sessions.find(owner_id);
   return it == _active_sessions.end() ? nullptr : &it->second;
@@ -69,7 +71,7 @@ SMS *SessionManager::GetSessionByUserId(snflake usr_id)
   return nullptr;
 }
 
-SMS const *SessionManager::GetSessionByUserId(snflake usr_id) const
+SMS const *SessionManager::GetSessionByUserId(snflake usr_id) const noexcept
 {
   for (auto &[_, Session] : _active_sessions)
     for (auto id : Session.MembersId)
@@ -80,14 +82,14 @@ SMS const *SessionManager::GetSessionByUserId(snflake usr_id) const
 }
 
 //// Session
-long SMS::GetRemainingTime()
+long SMS::GetRemainingTime() noexcept
 {
   using namespace std::chrono;
   auto elapsed = duration_cast<seconds>(steady_clock::now() - PhaseStartTime).count();
   return !mFlagCmp(Flags, Break) ? WorkPeriod - elapsed : BreakPeriod - elapsed;
 }
 
-void SMS::SchedulePhase(SessionManager &manager)
+void SMS::SchedulePhase(SessionManager &manager) noexcept
 {
 
   PhaseStartTime = std::chrono::steady_clock::now();
@@ -96,7 +98,7 @@ void SMS::SchedulePhase(SessionManager &manager)
   {
     Bot.message_create(dpp::message(ChannelId, "Pomodoro session finished!"));
     ChangeMembersStatus(manager, 0);
-    manager.CancelTimer(OwnerId);
+    manager.CancelSession(OwnerId);
     return;
   }
 
@@ -136,7 +138,7 @@ void SMS::SchedulePhase(SessionManager &manager)
       PlayAudio(Bot, GuildId, ChannelId, BreakToWorkAudio.path, BreakToWorkAudio.duration);
     ScheduleNext(WorkPeriod);
     CurrentSessionNumber++;
-    channel->set_name(fmt::format("{} - {}", "Work", VoiceChannelName));
+    // channel->set_name(fmt::format("{} - {}", "Work", VoiceChannelName));
     break;
   case 1: // Starting break session
     if (mFlagCmp(Flags, Mute))
@@ -144,25 +146,34 @@ void SMS::SchedulePhase(SessionManager &manager)
     if (mFlagCmp(Flags, Voice))
       PlayAudio(Bot, GuildId, ChannelId, WorkToBreakAudio.path, WorkToBreakAudio.duration);
     ScheduleNext(BreakPeriod);
-    channel->set_name(fmt::format("{} - {}", "Break", VoiceChannelName));
+    // channel->set_name(fmt::format("{} - {}", "Break", VoiceChannelName));
     break;
   }
-  manager.Bot.channel_edit(*channel);
+  // manager.Bot.channel_edit(*channel);
 }
 
-void SMS::ChangeMembersStatus(SessionManager &manager, bool mute)
+void SMS::ChangeMembersStatus(SessionManager &manager, bool mute) noexcept
 {
+  dpp::guild const *g = dpp::find_guild(GuildId);
+  if (!g)
+    return;
   dpp::guild_member GuildMember;
   GuildMember.guild_id = GuildId;
   GuildMember.set_mute(mute);
-  for (auto const &id : MembersId)
+  std::map<const dpp::snowflake, dpp::voicestate>::const_iterator it;
+
+  for (auto id : MembersId)
   {
-    GuildMember.user_id = id;
-    manager.Bot.guild_edit_member(GuildMember);
+    it = g->voice_members.find(id);
+    if (it != g->voice_members.end())
+    {
+      GuildMember.user_id = id;
+      manager.Bot.guild_edit_member(GuildMember);
+    }
   }
 };
 
-void SessionManager::StartTimer(
+void SessionManager::StartSession(
     snflake usr_id,
     dpp::channel *channel,
     unsigned work_period_in_min,
@@ -195,32 +206,23 @@ void SessionManager::StartTimer(
   res.first->second.SchedulePhase(*this);
 }
 
-bool SessionManager::CancelTimer(
-    snflake owner_id, std::function<void(SessionManager::Session const &session)> call_before_remove)
+bool SessionManager::ChangeOwnerId(dpp::snowflake old_id, dpp::snowflake new_id) noexcept
 {
-  auto it = _active_sessions.find(owner_id);
+  auto it = _active_sessions.find(old_id);
   if (it == _active_sessions.end())
     return 0;
 
-  Bot.stop_timer(it->second.TimerId);
-  Bot.channel_edit(dpp::find_channel(it->second.ChannelId)->set_name(it->second.VoiceChannelName));
-
-  if (call_before_remove)
-    call_before_remove(it->second);
-
-  _active_sessions.erase(it);
-
+  auto node_handle = _active_sessions.extract(it);
+  node_handle.key() = new_id;
+  node_handle.mapped().OwnerId = new_id;
+  _active_sessions.insert(std::move(node_handle));
   return 1;
 }
 
-void SessionManager::CancelTimer(
-    SMS *session, std::function<void(SessionManager::Session const &session)> call_before_remove)
+void SessionManager::ChangeOwnerId(SMS *session, dpp::snowflake new_id) noexcept
 {
-  Bot.stop_timer(session->TimerId);
-  session->ChangeMembersStatus(*this, 0);
-
-  if (call_before_remove)
-    call_before_remove(*session);
-
-  _active_sessions.erase(session->OwnerId);
+  auto node_handle = _active_sessions.extract(session->OwnerId);
+  node_handle.key() = new_id;
+  node_handle.mapped().OwnerId = new_id;
+  _active_sessions.insert(std::move(node_handle));
 }

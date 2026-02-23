@@ -178,7 +178,7 @@ HandlePomodoroStart(Pomodoro &self, const dpp::slashcommand_t &event, dpp::comma
     }
   }
 
-  self.ManagerRef.StartTimer(
+  self.ManagerRef.StartSession(
       usr_id,
       Channel,
       Uwork,
@@ -207,7 +207,7 @@ HandlePomodoroStart(Pomodoro &self, const dpp::slashcommand_t &event, dpp::comma
 
 // ------------------
 
-void Pomodoro::Handler(dpp::slashcommand_t const &event) noexcept
+void Pomodoro::SlashCommandHandler(dpp::slashcommand_t const &event) noexcept
 {
   dpp::command_interaction cmd_data = event.command.get_command_interaction();
   auto subcmd = cmd_data.options[0];
@@ -226,7 +226,7 @@ void Pomodoro::Handler(dpp::slashcommand_t const &event) noexcept
       event.reply(msg_fl("You aren't an owner of any active session", dpp::m_ephemeral));
       return;
     }
-    ManagerRef.CancelTimer(Session,
+    ManagerRef.CancelSession(Session,
 
                                 [this](SessionManager::Session const &s)
                                 { // Called if session found and before it removed
@@ -273,7 +273,10 @@ void Pomodoro::Handler(dpp::slashcommand_t const &event) noexcept
     }
 
     if (subcmd.empty())
+    {
+      event.reply(msg_fl("No options were provided", dpp::m_ephemeral));
       return;
+    }
 
     for (auto &option : subcmd.options)
     {
@@ -307,7 +310,64 @@ void Pomodoro::Handler(dpp::slashcommand_t const &event) noexcept
     event.reply("Option(s) has been successfully changed");
     return;
   }
+  if (subcmd.name == "")
+  {
+  }
 }
+
+void Pomodoro::VCHandler(dpp::voice_state_update_t const &e) noexcept
+{
+  if (ManagerRef.GetActiveSessions() == 0)
+    return;
+  dpp::cluster &bot = this->ManagerRef.Bot;
+  SessionManager::Session *res = ManagerRef.GetSessionByOwnerId(e.state.user_id);
+  auto HandleOwnerLeave = [&]()
+  {
+    if (res->MembersId.size() == 1)
+    {
+      ManagerRef.CancelSession(
+          res,
+          [&bot](SessionManager::Session const &s)
+          {
+            bot.message_create(
+                {s.ChannelId, fmt::format("<@{}>'s session is canceled because he left the VC", s.OwnerId)});
+          });
+      return;
+    }
+    for (auto it = res->MembersId.begin(); it != res->MembersId.end(); ++it)
+      if (*it == res->OwnerId)
+      {
+        res->MembersId.erase(it);
+        break;
+      }
+    bot.message_create(
+        {res->ChannelId, fmt::format("<@{}> left the channel the new owner is <@{}>.", e.state.user_id, res->OwnerId)});
+    ManagerRef.ChangeOwnerId(res, res->MembersId[0]);
+
+    return;
+  };
+  auto HandleMemberLeave = [&]()
+  {
+    for (auto it = res->MembersId.begin(); it != res->MembersId.end(); ++it)
+      if (*it == e.state.user_id)
+      {
+        bot.message_create(
+            {res->ChannelId, fmt::format("<@{}> left the channel and is removed from the session.", e.state.user_id)});
+        res->MembersId.erase(it);
+        break;
+      }
+  };
+  if (res)
+  {
+    HandleOwnerLeave();
+    return;
+  }
+  if ((res = ManagerRef.GetSessionByUserId(e.state.user_id)))
+  {
+    HandleMemberLeave();
+    return;
+  }
+};
 
 void AddPomodoroSlashCommand(std::vector<dpp::slashcommand> &SlashCommands, dpp::snowflake BotId) noexcept
 {
